@@ -1,0 +1,79 @@
+{% extends 'attendance/base.html' %}
+{% block title %}Dashboard - AttendanceQR{% endblock %}
+{% block content %}
+<div class="card-header" style="margin-bottom:2rem">
+    <h1 class="card-title">📊 Attendance Dashboard</h1>
+    <p class="card-subtitle">Today: {{ today|date:"l, F j, Y" }}</p>
+</div>
+<div class="stats-grid">
+    <div class="card stat-card">
+        <div class="stat-value total">{{ stats.total }}</div>
+        <div class="stat-label">Total Employees</div>
+    </div>
+    <div class="card stat-card">
+        <div class="stat-value present">{{ stats.present }}</div>
+        <div class="stat-label">Present Today</div>
+    </div>
+    <div class="card stat-card">
+        <div class="stat-value absent">{{ stats.absent }}</div>
+        <div class="stat-label">Absent Today</div>
+    </div>
+</div>
+<div class="card">
+    <h2 style="font-size:1.2rem;font-weight:600;margin-bottom:1rem">Today's Records</h2>
+    {% if records %}
+    <div style="overflow-x:auto">
+        <table class="records-table">
+            <thead>
+                <tr>
+                    <th>Employee</th>
+                    <th>Status</th>
+                    <th>Check-In</th>
+                    <th>Check-In Photo</th>
+                    <th>Check-Outs</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for record in records %}
+                <tr>
+                    <td>
+                        <strong>{{ record.employee.name }}</strong><br>
+                        <span style="color:var(--text-dim);font-size:.8rem">{{ record.employee.email }}</span>
+                    </td>
+                    <td>
+                        {% if record.status == 'present' %}
+                            <span class="status-badge status-present">Present</span>
+                        {% elif record.status == 'absent' %}
+                            <span class="status-badge status-absent">Absent</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ record.check_in_time|date:"h:i:s A"|default:"—" }}</td>
+                    <td>
+                        {% if record.check_in_photo %}
+                            <img src="{{ record.check_in_photo.url }}" alt="Check-in" style="width:60px;height:45px;object-fit:cover;border-radius:8px;border:1px solid var(--glass-border)">
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% for co in record.checkouts.all %}
+                            <div style="font-size:.85rem;margin-bottom:.3rem">
+                                🔓 {{ co.check_out_time|date:"h:i:s A" }}
+                                {% if co.check_out_photo %}
+                                    <img src="{{ co.check_out_photo.url }}" alt="Checkout" style="width:40px;height:30px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-left:.3rem">
+                                {% endif %}
+                            </div>
+                        {% empty %}
+                            <span style="color:var(--text-dim)">—</span>
+                        {% endfor %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+        <p style="text-align:center;color:var(--text-dim);padding:2rem">No attendance records for today yet.</p>
+    {% endif %}
+</div>
+{% endblock %}

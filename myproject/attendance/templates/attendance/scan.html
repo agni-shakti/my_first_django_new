@@ -1,0 +1,285 @@
+{% extends 'attendance/base.html' %}
+{% block title %}Scan QR - AttendanceQR{% endblock %}
+{% block extra_head %}
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+{% endblock %}
+{% block content %}
+<div style="max-width:550px;margin:0 auto">
+    <!-- Step Indicators -->
+    <div class="steps">
+        <div class="step active" id="step-1"><span class="step-num">1</span> Scan QR</div>
+        <div class="step" id="step-2"><span class="step-num">2</span> Take Photo</div>
+        <div class="step" id="step-3"><span class="step-num">3</span> Done</div>
+    </div>
+
+    <!-- STEP 1: Scanner -->
+    <div id="scanner-panel" class="card">
+        <div class="card-header"><h1 class="card-title">Scan Your QR Code</h1><p class="card-subtitle">Point your camera at your QR code to begin</p></div>
+        <div id="qr-reader" style="width:100%;border-radius:12px;overflow:hidden"></div>
+        <p id="scanner-status" style="text-align:center;margin-top:1rem;color:var(--text-dim);font-size:.9rem">Initializing camera...</p>
+    </div>
+
+    <!-- STEP 2: Employee Info + Camera -->
+    <div id="action-panel" class="card hidden">
+        <div class="employee-panel" id="emp-info">
+            <h2 class="employee-name" id="emp-name"></h2>
+            <p class="employee-email" id="emp-email"></p>
+            <div id="emp-status"></div>
+        </div>
+        <div id="attendance-info" style="margin:1rem 0"></div>
+
+        <!-- Camera for photo -->
+        <div id="camera-area" class="camera-section hidden">
+            <h3 style="margin-bottom:.5rem;font-size:1.1rem" id="camera-label">📸 Capture Photo</h3>
+            <video id="camera-feed" autoplay playsinline></video>
+            <canvas id="photo-canvas"></canvas>
+            <img id="photo-preview" class="photo-preview hidden" alt="Captured photo">
+            <div class="camera-controls">
+                <button class="btn btn-primary" id="btn-capture" onclick="capturePhoto()">📸 Capture Photo</button>
+                <button class="btn btn-outline hidden" id="btn-retake" onclick="retakePhoto()">🔄 Retake</button>
+            </div>
+        </div>
+
+        <div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;margin-top:1.5rem" id="action-buttons">
+            <button class="btn btn-success hidden" id="btn-checkin" onclick="doCheckin()">✅ Check In</button>
+            <button class="btn btn-danger hidden" id="btn-checkout" onclick="doCheckout()">🔓 Check Out</button>
+        </div>
+        <div id="action-status" style="text-align:center;margin-top:1rem"></div>
+    </div>
+
+    <!-- STEP 3: Result -->
+    <div id="result-panel" class="card hidden" style="text-align:center">
+        <span class="success-icon" id="result-icon">✅</span>
+        <h2 id="result-title" class="card-title"></h2>
+        <p id="result-message" style="color:var(--text-dim);margin:1rem 0"></p>
+        <button class="btn btn-primary" onclick="resetScanner()">🔄 Scan Again</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let html5QrCode = null;
+let currentEmployee = null;
+let capturedPhotoData = null;
+let cameraStream = null;
+let currentAction = null; // 'checkin' or 'checkout'
+
+// Initialize QR Scanner
+document.addEventListener('DOMContentLoaded', () => { startScanner(); });
+
+function startScanner() {
+    const qrReader = document.getElementById('qr-reader');
+    html5QrCode = new Html5Qrcode("qr-reader");
+    html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        onScanSuccess,
+        () => {}
+    ).then(() => {
+        document.getElementById('scanner-status').textContent = 'Camera ready — show your QR code';
+    }).catch(err => {
+        document.getElementById('scanner-status').innerHTML = '<span style="color:var(--danger)">Camera error: ' + err + '</span>';
+    });
+}
+
+function onScanSuccess(decodedText) {
+    // Stop scanner
+    if (html5QrCode) html5QrCode.stop().catch(() => {});
+    document.getElementById('scanner-status').innerHTML = '<span class="spinner"></span> Verifying...';
+    
+    // Verify with server
+    fetch('/api/verify-qr/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ qr_data: decodedText })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            document.getElementById('scanner-status').innerHTML = '<span style="color:var(--danger)">❌ ' + data.error + '</span>';
+            setTimeout(startScanner, 3000);
+            return;
+        }
+        currentEmployee = data.employee;
+        showActionPanel(data);
+    })
+    .catch(() => {
+        document.getElementById('scanner-status').innerHTML = '<span style="color:var(--danger)">Network error</span>';
+        setTimeout(startScanner, 3000);
+    });
+}
+
+function showActionPanel(data) {
+    document.getElementById('scanner-panel').classList.add('hidden');
+    document.getElementById('action-panel').classList.remove('hidden');
+    setStep(2);
+
+    // Employee info
+    document.getElementById('emp-name').textContent = data.employee.name;
+    document.getElementById('emp-email').textContent = data.employee.email;
+
+    let statusHtml = '';
+    const info = document.getElementById('attendance-info');
+    
+    if (data.is_past_cutoff && !data.attendance.checked_in) {
+        statusHtml = '<span class="status-badge status-absent">⛔ ABSENT — Past ' + data.cutoff_hour + ':00 AM cutoff</span>';
+        info.innerHTML = '<p style="text-align:center;color:var(--danger)">Check-in is no longer available today.</p>';
+        document.getElementById('camera-area').classList.add('hidden');
+        document.getElementById('btn-checkin').classList.add('hidden');
+        document.getElementById('btn-checkout').classList.add('hidden');
+    } else if (data.can_checkin) {
+        statusHtml = '<span class="status-badge" style="background:rgba(108,99,255,.15);color:var(--accent);border:1px solid rgba(108,99,255,.3)">🕐 Not Checked In</span>';
+        info.innerHTML = '<p style="text-align:center;color:var(--text-dim)">Take a photo and check in to mark your attendance.</p>';
+        currentAction = 'checkin';
+        showCamera('Check-In Photo');
+        document.getElementById('btn-checkin').classList.remove('hidden');
+        document.getElementById('btn-checkout').classList.add('hidden');
+    } else if (data.can_checkout) {
+        statusHtml = '<span class="status-badge status-present">✅ Checked in at ' + data.attendance.check_in_time + '</span>';
+        let checkoutsHtml = '';
+        if (data.attendance.checkouts && data.attendance.checkouts.length > 0) {
+            checkoutsHtml = '<ul class="checkout-list">';
+            data.attendance.checkouts.forEach(co => {
+                checkoutsHtml += '<li class="checkout-item">Check-out at ' + co.check_out_time + '</li>';
+            });
+            checkoutsHtml += '</ul>';
+        }
+        info.innerHTML = '<p style="text-align:center;color:var(--text-dim)">You can check out (multiple times allowed).</p>' + checkoutsHtml;
+        currentAction = 'checkout';
+        showCamera('Check-Out Photo');
+        document.getElementById('btn-checkin').classList.add('hidden');
+        document.getElementById('btn-checkout').classList.remove('hidden');
+    } else {
+        statusHtml = '<span class="status-badge status-present">✅ Already checked in</span>';
+        info.innerHTML = '<p style="text-align:center;color:var(--text-dim)">You have already checked in today.</p>';
+    }
+    document.getElementById('emp-status').innerHTML = statusHtml;
+}
+
+function showCamera(label) {
+    document.getElementById('camera-label').textContent = '📸 ' + label;
+    document.getElementById('camera-area').classList.remove('hidden');
+    const video = document.getElementById('camera-feed');
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
+    .then(stream => {
+        cameraStream = stream;
+        video.srcObject = stream;
+    })
+    .catch(err => {
+        document.getElementById('camera-area').innerHTML = '<p style="color:var(--danger)">Camera access denied: ' + err.message + '</p>';
+    });
+}
+
+function capturePhoto() {
+    const video = document.getElementById('camera-feed');
+    const canvas = document.getElementById('photo-canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    capturedPhotoData = canvas.toDataURL('image/png');
+    
+    document.getElementById('photo-preview').src = capturedPhotoData;
+    document.getElementById('photo-preview').classList.remove('hidden');
+    document.getElementById('photo-preview').style.transform = 'scaleX(-1)';
+    document.getElementById('btn-capture').classList.add('hidden');
+    document.getElementById('btn-retake').classList.remove('hidden');
+    video.classList.add('hidden');
+}
+
+function retakePhoto() {
+    capturedPhotoData = null;
+    document.getElementById('photo-preview').classList.add('hidden');
+    document.getElementById('btn-capture').classList.remove('hidden');
+    document.getElementById('btn-retake').classList.add('hidden');
+    document.getElementById('camera-feed').classList.remove('hidden');
+}
+
+function doCheckin() {
+    if (!capturedPhotoData) { alert('Please capture a photo first!'); return; }
+    const btn = document.getElementById('btn-checkin');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Checking in...';
+
+    fetch('/api/checkin/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employee_id: currentEmployee.id, photo: capturedPhotoData })
+    })
+    .then(r => r.json())
+    .then(data => {
+        stopCamera();
+        if (data.error) {
+            showResult('❌', 'Check-In Failed', data.error);
+        } else {
+            showResult('✅', 'Checked In!', data.message);
+        }
+    })
+    .catch(() => showResult('❌', 'Error', 'Network error. Please try again.'));
+}
+
+function doCheckout() {
+    if (!capturedPhotoData) { alert('Please capture a photo first!'); return; }
+    const btn = document.getElementById('btn-checkout');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Checking out...';
+
+    fetch('/api/checkout/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employee_id: currentEmployee.id, photo: capturedPhotoData })
+    })
+    .then(r => r.json())
+    .then(data => {
+        stopCamera();
+        if (data.error) {
+            showResult('❌', 'Check-Out Failed', data.error);
+        } else {
+            showResult('🔓', 'Checked Out!', data.message + ' (Total check-outs today: ' + data.total_checkouts + ')');
+        }
+    })
+    .catch(() => showResult('❌', 'Error', 'Network error. Please try again.'));
+}
+
+function showResult(icon, title, message) {
+    document.getElementById('action-panel').classList.add('hidden');
+    document.getElementById('result-panel').classList.remove('hidden');
+    document.getElementById('result-icon').textContent = icon;
+    document.getElementById('result-title').textContent = title;
+    document.getElementById('result-message').textContent = message;
+    setStep(3);
+}
+
+function stopCamera() {
+    if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+}
+
+function resetScanner() {
+    stopCamera();
+    currentEmployee = null;
+    capturedPhotoData = null;
+    currentAction = null;
+    document.getElementById('result-panel').classList.add('hidden');
+    document.getElementById('action-panel').classList.add('hidden');
+    document.getElementById('scanner-panel').classList.remove('hidden');
+    document.getElementById('scanner-status').textContent = 'Initializing camera...';
+    document.getElementById('btn-checkin').classList.add('hidden');
+    document.getElementById('btn-checkout').classList.add('hidden');
+    document.getElementById('btn-capture').classList.remove('hidden');
+    document.getElementById('btn-retake').classList.add('hidden');
+    document.getElementById('photo-preview').classList.add('hidden');
+    document.getElementById('camera-feed').classList.remove('hidden');
+    setStep(1);
+    startScanner();
+}
+
+function setStep(n) {
+    [1,2,3].forEach(i => {
+        const el = document.getElementById('step-' + i);
+        el.classList.remove('active','done');
+        if (i < n) el.classList.add('done');
+        else if (i === n) el.classList.add('active');
+    });
+}
+</script>
+{% endblock %}

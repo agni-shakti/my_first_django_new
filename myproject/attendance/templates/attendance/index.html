@@ -1,0 +1,35 @@
+{% extends 'attendance/base.html' %}
+{% block title %}AttendanceQR - Smart Attendance System{% endblock %}
+{% block content %}
+<div class="hero">
+    <h1 class="hero-title">Smart QR Attendance System</h1>
+    <p class="hero-desc">Sign up, get your unique QR code, and mark your attendance with photo verification. Fast, secure, and automated.</p>
+    <div class="hero-actions">
+        <a href="{% url 'signup' %}" class="btn btn-primary" id="cta-signup">🚀 Sign Up Now</a>
+        <a href="{% url 'scan' %}" class="btn btn-success" id="cta-scan">📷 Scan QR Code</a>
+        <a href="{% url 'dashboard' %}" class="btn btn-outline" id="cta-dashboard">📊 View Dashboard</a>
+    </div>
+</div>
+<div class="features-grid">
+    <div class="card">
+        <span class="feature-icon">🔐</span>
+        <h3 class="feature-title">QR Code Identity</h3>
+        <p class="feature-desc">Each employee gets a unique QR code after signup. Scan it to instantly verify identity.</p>
+    </div>
+    <div class="card">
+        <span class="feature-icon">📸</span>
+        <h3 class="feature-title">Photo Verification</h3>
+        <p class="feature-desc">Photos are captured during check-in and every check-out for complete audit trail.</p>
+    </div>
+    <div class="card">
+        <span class="feature-icon">⏰</span>
+        <h3 class="feature-title">Auto Absent Marking</h3>
+        <p class="feature-desc">Employees who don't check in before 11:00 AM are automatically marked absent.</p>
+    </div>
+    <div class="card">
+        <span class="feature-icon">🔄</span>
+        <h3 class="feature-title">Multiple Check-outs</h3>
+        <p class="feature-desc">Single check-in per day, but multiple check-outs allowed — each with timestamp & photo.</p>
+    </div>
+</div>
+{% endblock %}

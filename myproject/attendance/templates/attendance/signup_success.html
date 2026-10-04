@@ -1,0 +1,20 @@
+{% extends 'attendance/base.html' %}
+{% block title %}Registration Successful - AttendanceQR{% endblock %}
+{% block content %}
+<div style="max-width:550px;margin:2rem auto">
+    <div class="card" style="text-align:center">
+        <span class="success-icon">✅</span>
+        <h1 class="card-title">Registration Successful!</h1>
+        <p class="card-subtitle" style="margin-bottom:1.5rem">Welcome, <strong>{{ employee.name }}</strong>! Your unique QR code has been generated.</p>
+        <div class="qr-container">
+            <img src="{{ employee.qr_code.url }}" alt="QR Code for {{ employee.name }}" id="qr-image">
+        </div>
+        <p style="color:var(--text-dim);font-size:.9rem;margin:1rem 0">📧 {{ employee.email }}</p>
+        <p style="color:var(--text-dim);font-size:.85rem;margin-bottom:1.5rem">Save or print this QR code. You'll need it to mark your attendance every day.</p>
+        <div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap">
+            <a href="{% url 'scan' %}" class="btn btn-success" id="go-scan">📷 Scan QR to Check In</a>
+            <a href="{% url 'signup' %}" class="btn btn-outline" id="register-another">Register Another</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

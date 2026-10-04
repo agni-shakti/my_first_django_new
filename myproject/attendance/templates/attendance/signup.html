@@ -1,0 +1,24 @@
+{% extends 'attendance/base.html' %}
+{% block title %}Sign Up - AttendanceQR{% endblock %}
+{% block content %}
+<div style="max-width:500px;margin:2rem auto">
+    <div class="card">
+        <div class="card-header">
+            <h1 class="card-title">Employee Registration</h1>
+            <p class="card-subtitle">Sign up to receive your unique QR code for attendance</p>
+        </div>
+        <form action="{% url 'signup' %}" method="POST" id="signup-form">
+            {% csrf_token %}
+            <div class="form-group">
+                <label class="form-label" for="name">Full Name</label>
+                <input type="text" class="form-input" id="name" name="your_name" placeholder="Enter your full name" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="email_id">Email Address</label>
+                <input type="email" class="form-input" id="email_id" name="email_official" placeholder="Enter your official email" required>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%" id="signup-submit">🚀 Register & Generate QR Code</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
