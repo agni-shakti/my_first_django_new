@@ -1,3 +1,4 @@
 myproject/db.sqlite3
 myproject/attendance/__pycache__/
 myproject/attendance/migrations/__pycache__/
+*.png

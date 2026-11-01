@@ -129,7 +129,7 @@ function showActionPanel(data) {
         document.getElementById('btn-checkin').classList.add('hidden');
         document.getElementById('btn-checkout').classList.add('hidden');
     } else if (data.can_checkin) {
-        statusHtml = '<span class="status-badge" style="background:rgba(108,99,255,.15);color:var(--accent);border:1px solid rgba(108,99,255,.3)">🕐 Not Checked In</span>';
+        statusHtml = '<span class="status-badge status-pending">🕐 Not Checked In</span>';
         info.innerHTML = '<p style="text-align:center;color:var(--text-dim)">Take a photo and check in to mark your attendance.</p>';
         currentAction = 'checkin';
         showCamera('Check-In Photo');
